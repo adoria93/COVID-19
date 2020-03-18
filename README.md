@@ -7,4 +7,6 @@ The first major news story of 2020 was the outbreak of a new coronavirus in Wuha
 
 I chose these three countries to focus on because China is where everything started, Italy was one of the first countries outside of China to be seriously impacted by COVID-19 and the United States is in the early states of dealing with the outbreak.
 
+Included here is the R code used to create the separate datasets for the visualizations.
+
 A full link to the data and a very good dashboard is located here: https://github.com/CSSEGISandData/COVID-19/blob/master/README.md

@@ -1,0 +1,328 @@
+library(tidyverse)
+
+# Dataset Link:
+# https://www.kaggle.com/imdevskp/corona-virus-report
+
+# Data used is up to date as of March 22, 2020.
+
+#Importing the data
+covid_19_clean_complete <- read.csv("~/Projects/03 COVID-19 Forecast/00 Data/covid_19_clean_complete.csv")
+
+#------------------------
+# Create a working version of the data
+corona <- covid_19_clean_complete
+
+# Convert the Date column to actually be a date
+class(corona$Date)
+corona$Date <- as.Date(corona$Date, format = "%m/%d/%y")
+class(corona$Date)
+
+# To figure out the number of active cases, a new variable
+# will need to be created. This variable will be the number
+# of cases that have not changed into a death or a recovery.
+# In other words:
+#   active = confirmed - deaths - recovered
+
+corona$Active <- corona$Confirmed - corona$Deaths - corona$Recovered
+
+#----------------------------
+# Confirmed Cases Worldwide
+#----------------------------
+
+confirmed <- corona %>%
+  group_by(Date) %>%
+  summarize(total_confirmed = sum(Confirmed),
+            total_deaths = sum(Deaths),
+            total_recoveries = sum(Recovered),
+            active_cases = sum(Active))
+
+ggplot(data = confirmed, aes(x = Date, y = total_confirmed, group = 1)) +
+  geom_line() +
+  geom_point() +
+  ggtitle("Confirmed Cases Over Time (Worldwide)") +
+  xlab("Date") + ylab("Confirmed")
+
+#----------------------------
+# Confirmed Deaths Worldwide
+#----------------------------
+
+deaths <- corona %>%
+  group_by(Date) %>%
+  arrange(Date) %>%
+  summarize(total_deaths = sum(Deaths))
+
+ggplot(data = deaths, aes(x = Date, y = total_deaths, group = 1)) +
+  geom_line() +
+  geom_point() +
+  ggtitle("Confirmed Deaths Over Time (Worldwide") +
+  xlab("Date") + ylab("Confirmed")
+
+#----------------------------
+# Most affected countries
+#----------------------------
+
+confirmed_byCountry <- corona %>%
+  group_by(`Country.Region`, Date) %>%
+  summarize(total_confirmed = sum(Confirmed),
+            total_deaths = sum(Deaths),
+            total_recoveries = sum(Recovered),
+            active_cases = sum(Active))
+
+# The date is no longer imporant, just looking for the
+# totals.
+confirmed_byCountry <- confirmed_byCountry %>%
+  group_by(`Country.Region`) %>%
+  summarize(total_confirmed = max(total_confirmed),
+            total_deaths = max(total_deaths),
+            total_recoveries = max(total_recoveries),
+            active_cases = max(active_cases))
+
+# Top 10 countries by confirmed cases
+top10_confirmed <- head(arrange(confirmed_byCountry, desc(total_confirmed)), n = 10)
+
+ggplot(data = top10_confirmed, aes(x = reorder(`Country.Region`, total_confirmed), y = total_confirmed)) +
+  geom_bar(stat="identity", fill = "Blue") +
+  geom_text(aes(label=total_confirmed), color = "white", hjust = 1.2) +
+  ggtitle("Confirmed Cases (Worldwide)") +
+  xlab("Country") +
+  ylab("Total Confirmed") +
+  coord_flip()
+
+# Top 10 countries by deaths
+top10_deaths <- head(arrange(confirmed_byCountry, desc(total_deaths)), n = 10)
+
+ggplot(data = top10_deaths, aes(x = reorder(`Country.Region`, total_deaths), y = total_deaths)) +
+  geom_bar(stat="identity", fill = "Blue") +
+  geom_text(aes(label=total_deaths), color = "white", hjust = 1.2) +
+  ggtitle("Confirmed Deaths (Worldwide)") +
+  xlab("Country") +
+  ylab("Total Deaths") +
+  coord_flip()
+
+# Top 10 countries by recoveries
+top10_recoveries <- head(arrange(confirmed_byCountry, desc(total_recoveries)), n = 10)
+
+ggplot(data = top10_recoveries, aes(x = reorder(`Country.Region`, total_recoveries), y = total_recoveries)) +
+  geom_bar(stat="identity", fill = "Blue") +
+  geom_text(aes(label=total_recoveries), color = "white", hjust = 1.2) +
+  ggtitle("Confirmed Recoveries (Worldwide)") +
+  xlab("Country") +
+  ylab("Total Recoveries") +
+  coord_flip()
+
+#----------------------------
+# Active Cases
+# Active Cases are cases of those affected by the virus,
+# excluding those who died or recovered.
+#----------------------------
+
+active <- corona %>%
+  group_by(Date) %>%
+  summarize(total_active = sum(Active))
+
+ggplot(data = active, aes(x = Date, y = total_active, group = 1)) +
+  geom_line() +
+  geom_point() +
+  ggtitle("Active Cases Over Time (Worldwide)") +
+  xlab("Date") + ylab("Active Cases")
+
+# Latest Information
+latest <- tail(confirmed, 1)
+write.csv(latest, "latest_info.csv")
+
+#----------------------------
+# Case: China
+# COVID-19 was first detected in China, looking to see how
+# China has dealt with the virus.
+#----------------------------
+
+china <- filter(corona, `Country.Region` == 'China')
+
+confirmed_china <- china %>%
+  group_by(Date) %>%
+  summarize(total_confirmed = sum(Confirmed),
+            total_deaths = sum(Deaths),
+            total_recoveries = sum(Recovered),
+            active_cases = sum(Active))
+
+ggplot(data = confirmed_china, aes(x = Date, y = total_confirmed, group = 1)) +
+  geom_line() +
+  geom_point() +
+  ggtitle("Confirmed Cases Over Time (China)") +
+  xlab("Date") + ylab("Confirmed")
+
+ggplot(data = confirmed_china, aes(x = Date, y = active_cases, group = 1)) +
+  geom_line() +
+  geom_point() +
+  ggtitle("Active Cases Over Time (China)") +
+  xlab("Date") + ylab("Active")
+
+# Breakdown by Region
+china_byRegion <- china %>%
+  group_by(`Province.State`, Date) %>%
+  summarize(total_confirmed = sum(Confirmed),
+            active_cases = sum(Active))
+
+# This will remove the date
+china_byRegion_nodate <- china_byRegion %>%
+  group_by(`Province.State`) %>%
+  summarize(total_confirmed = max(total_confirmed),
+            active_cases = max(active_cases)) %>%
+  arrange(desc(total_confirmed))
+
+head(china_byRegion_nodate)
+
+# To put everything into perspective, I'm going to group
+# all the provinces in China together to compare against
+# just Hubei.
+
+hubei <- china_byRegion_nodate %>%
+  mutate(isHubei = ifelse(`Province.State` == 'Hubei', 'Hubei', 'Rest of China')) %>%
+  group_by(isHubei) %>%
+  summarize(total_confirmed = sum(total_confirmed),
+            active_cases = sum(active_cases))
+
+ggplot(data = hubei, aes(x = reorder(isHubei, total_confirmed), y = total_confirmed)) +
+  geom_bar(stat="identity", fill = "Blue") +
+  geom_text(aes(label=total_confirmed), color = "white", hjust = 1.2) +
+  ggtitle("Confirmed Cases (China)") +
+  xlab("Province") +
+  ylab("Total Confirmed") +
+  coord_flip()
+
+# Active Cases over time in Hubei
+hubei_active <- china_byRegion %>%
+  group_by(`Province.State`, Date) %>%
+  summarize(total_active = sum(active_cases))
+
+hubei_active <- filter(hubei_active, `Province.State` == 'Hubei')
+
+ggplot(data = hubei_active, aes(x = Date, y = total_active, group = 1)) +
+  geom_line() +
+  geom_point() +
+  ggtitle("Active Cases Over Time in Hubei") +
+  xlab("Date") + ylab("Active Cases")
+
+#----------------------------
+# Case: Italy
+# Italy was the first country outside of China to be seriously
+# impacted by the virus.
+#----------------------------
+
+italy <- filter(corona, `Country.Region` == 'Italy')
+
+confirmed_italy <- italy %>%
+  group_by(Date) %>%
+  summarize(total_confirmed = sum(Confirmed),
+            total_deaths = sum(Deaths),
+            total_recoveries = sum(Recovered),
+            total_active = sum(Active))
+
+ggplot(data = confirmed_italy, aes(x = Date, y = total_confirmed, group = 1)) +
+  geom_line() +
+  geom_point() +
+  ggtitle("Confirmed Cases Over Time (Italy)") +
+  xlab("Date") + ylab("Confirmed")
+
+ggplot(data = confirmed_italy, aes(x = Date, y = total_active, group = 1)) +
+  geom_line() +
+  geom_point() +
+  ggtitle("Active Cases Over Time (Italy)") +
+  xlab("Date") + ylab("Active Cases")
+
+#----------------------------
+# Case: United States
+# 
+#----------------------------
+
+usa <- filter(corona, `Country.Region` == 'US')
+
+confirmed_usa <- usa %>%
+  group_by(Date) %>%
+  summarize(total_confirmed = sum(Confirmed),
+            total_deaths = sum(Deaths),
+            total_recoveries = sum(Recovered),
+            total_active = sum(Active))
+
+ggplot(data = confirmed_usa, aes(x = Date, y = total_confirmed, group = 1)) +
+  geom_line() +
+  geom_point() +
+  ggtitle("Confirmed Cases Over Time (USA)") +
+  xlab("Date") + ylab("Confirmed")
+
+ggplot(data = confirmed_usa, aes(x = Date, y = total_active, group = 1)) +
+  geom_line() +
+  geom_point() +
+  ggtitle("Active Cases Over Time (USA)") +
+  xlab("Date") + ylab("Active Cases")
+
+# What states are the most affected by COVID-19?
+usa_byState <- usa %>%
+  group_by(`Province.State`, Date) %>%
+  summarize(total_confirmed = sum(Confirmed),
+            total_deaths = sum(Deaths),
+            total_recoveries = sum(Recovered),
+            active_cases = sum(Active))
+
+usa_byState <- usa_byState %>%
+  group_by(`Province.State`) %>%
+  summarize(total_confirmed = max(total_confirmed),
+            total_deaths = max(total_deaths),
+            total_recoveries = max(total_recoveries),
+            total_active = max(active_cases)) %>%
+  arrange(desc(total_confirmed))
+
+head(usa_byState)
+
+#----------------------------
+# Mortality and Recovery Over Time
+# It might be interesting to see how these change as
+# time goes on
+#----------------------------
+
+# mortality = deaths / confirmed
+confirmed$mortality_rate <- round((confirmed$total_deaths / confirmed$total_confirmed), 2)
+
+# recovery = recovered / confirmed
+confirmed$recovery_rate <- round((confirmed$total_recoveries / confirmed$total_confirmed), 2)
+
+ggplot() +
+  geom_line(data = confirmed, aes(x = Date, y = mortality_rate, color = "red"), size = 1) +
+  geom_line(data = confirmed, aes(x = Date, y = recovery_rate, color = "blue"), size = 1) +
+  scale_color_discrete(name = "Rate", labels = c("Recovery", "Mortality")) +
+  ggtitle("Morality vs. Recovery Rate (Worldwide)") +
+  xlab("Date") + ylab("Percentage")
+
+confirmed_byCountry <- confirmed_byCountry %>%
+  group_by(`Country.Region`) %>%
+  mutate(recovery_rate = round(total_recoveries / total_confirmed, 2),
+         mortality_rate = round(total_deaths / total_confirmed, 2))
+
+# Top 10 countries by mortality
+top10_mortality <- head(arrange(confirmed_byCountry, desc(mortality_rate)), n = 10)
+
+ggplot(data = top10_mortality, aes(x = reorder(`Country.Region`, mortality_rate), y = mortality_rate)) +
+  geom_bar(stat="identity", fill = "Blue") +
+  geom_text(aes(label=mortality_rate), color = "white", hjust = 1.2) +
+  ggtitle("Mortality Rates") +
+  xlab("Country") +
+  ylab("Mortality Rate") +
+  coord_flip()
+
+# Top 10 countries by recovery
+top10_recovery <- head(arrange(confirmed_byCountry, desc(recovery_rate)), n = 10)
+
+ggplot(data = top10_recovery, aes(x = reorder(`Country.Region`, recovery_rate), y = recovery_rate)) +
+  geom_bar(stat="identity", fill = "Blue") +
+  geom_text(aes(label=recovery_rate), color = "white", hjust = 1.2) +
+  ggtitle("Recovery Rates") +
+  xlab("Country") +
+  ylab("Recovery Rate") +
+  coord_flip()
+
+usa_italy <- filter(confirmed_byCountry, `Country.Region` == 'Italy' |
+                      `Country.Region` == 'US')
+
+print(usa_italy)
+write.csv(usa_italy, "usa_italy_stats.csv")
+
